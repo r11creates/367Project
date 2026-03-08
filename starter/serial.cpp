@@ -16,6 +16,10 @@
 #include <math.h>
 #include "common.h"
 
+// constants for spatial binning (must match common.cpp; do not change common files)
+#define CUTOFF 0.01
+#define DENSITY 0.0005
+
 //
 //  benchmarking program
 //
@@ -46,6 +50,21 @@ int main( int argc, char **argv )
     particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
     set_size( n );
     init_particles( n, particles );
+
+    // compute simulation box size (same formula as in common.cpp set_size)
+    double simulationSize = sqrt( DENSITY * n );
+    // number of cells per dimension; cell width >= cutoff so neighbors only in 3x3 block
+    int numberCellsX = (int)( simulationSize / CUTOFF );
+    int numberCellsY = (int)( simulationSize / CUTOFF );
+    if ( numberCellsX < 1 ) numberCellsX = 1;
+    if ( numberCellsY < 1 ) numberCellsY = 1;
+    double cellWidthX = simulationSize / numberCellsX;
+    double cellWidthY = simulationSize / numberCellsY;
+    int totalCells = numberCellsX * numberCellsY;
+
+    // cell list: each cell holds a linked list of particle indices
+    int *cellFirst = (int*) malloc( totalCells * sizeof(int) );
+    int *nextInCell = (int*) malloc( n * sizeof(int) );
     
     //
     //  simulate a number of time steps
@@ -57,16 +76,60 @@ int main( int argc, char **argv )
 	navg = 0;
         davg = 0.0;
 	dmin = 1.0;
-        //
-        //  compute forces
-        //
-        for( int i = 0; i < n; i++ )
+
+        // clear cell lists (all cells empty)
+        for ( int cellIndex = 0; cellIndex < totalCells; cellIndex++ )
+            cellFirst[cellIndex] = -1;
+
+        // bin particles into cells by position (cell width >= cutoff)
+        for ( int particleIndex = 0; particleIndex < n; particleIndex++ )
         {
-            particles[i].ax = particles[i].ay = 0;
-            for (int j = 0; j < n; j++ )
-				apply_force( particles[i], particles[j],&dmin,&davg,&navg);
+            double x = particles[particleIndex].x;
+            double y = particles[particleIndex].y;
+            int cellX = (int)( x / cellWidthX );
+            int cellY = (int)( y / cellWidthY );
+            if ( cellX >= numberCellsX ) cellX = numberCellsX - 1;
+            if ( cellY >= numberCellsY ) cellY = numberCellsY - 1;
+            if ( cellX < 0 ) cellX = 0;
+            if ( cellY < 0 ) cellY = 0;
+            int cellIndex = cellY * numberCellsX + cellX;
+            nextInCell[particleIndex] = cellFirst[cellIndex];
+            cellFirst[cellIndex] = particleIndex;
         }
- 
+
+        //
+        //  compute forces using only neighbors in same or adjacent cells (O(n) expected)
+        //
+        for ( int particleIndex = 0; particleIndex < n; particleIndex++ )
+        {
+            particles[particleIndex].ax = 0;
+            particles[particleIndex].ay = 0;
+
+            double x = particles[particleIndex].x;
+            double y = particles[particleIndex].y;
+            int centerCellX = (int)( x / cellWidthX );
+            int centerCellY = (int)( y / cellWidthY );
+            if ( centerCellX >= numberCellsX ) centerCellX = numberCellsX - 1;
+            if ( centerCellY >= numberCellsY ) centerCellY = numberCellsY - 1;
+            if ( centerCellX < 0 ) centerCellX = 0;
+            if ( centerCellY < 0 ) centerCellY = 0;
+
+            // check 3x3 neighborhood of cells (all neighbors within cutoff lie here)
+            for ( int offsetY = -1; offsetY <= 1; offsetY++ )
+            {
+                int cellY = centerCellY + offsetY;
+                if ( cellY < 0 || cellY >= numberCellsY ) continue;
+                for ( int offsetX = -1; offsetX <= 1; offsetX++ )
+                {
+                    int cellX = centerCellX + offsetX;
+                    if ( cellX < 0 || cellX >= numberCellsX ) continue;
+                    int cellIndex = cellY * numberCellsX + cellX;
+                    for ( int neighborIndex = cellFirst[cellIndex]; neighborIndex != -1; neighborIndex = nextInCell[neighborIndex] )
+                        apply_force( particles[particleIndex], particles[neighborIndex], &dmin, &davg, &navg );
+                }
+            }
+        }
+
         //
         //  move particles
         //
@@ -120,6 +183,8 @@ int main( int argc, char **argv )
     //
     // Clearing space
     //
+    free( cellFirst );
+    free( nextInCell );
     if( fsum )
         fclose( fsum );    
     free( particles );

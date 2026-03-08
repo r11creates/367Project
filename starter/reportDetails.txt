@@ -1,0 +1,138 @@
+================================================================================
+PART 1: SIMULATION AND TEST RESULTS FOR THE REPORT (report-part1.pdf)
+================================================================================
+Run from: cd starter, then use sbatch or run commands as in auto-teach-* scripts.
+These results are from a local g++ build; use Scinet (Intel, sbatch) for final
+report numbers.
+
+--------------------------------------------------------------------------------
+1. CORRECTNESS CHECK (job-teach-* style)
+--------------------------------------------------------------------------------
+Serial:
+  ./serial -n 1000 -o serial.txt
+  n = 1000, simulation time = ... seconds, absmin = 0.76..., absavg = 0.95...
+  -> absmin in [0.7, 0.8], absavg ~0.95 => correct.
+
+OpenMP:
+  OMP_NUM_THREADS=16 ./openmp -n 5000 -o openmp.txt
+  n = 5000, threads = 16, simulation time = ... seconds, absmin = 0.73..., absavg = 0.95...
+  -> absmin > 0.4, absavg ~0.95 => correct.
+
+--------------------------------------------------------------------------------
+2. SERIAL: RUNNING TIME VS PARTICLE COUNT (for table and log-log plot)
+--------------------------------------------------------------------------------
+Summary file format: one line per run "n time" (e.g. serial_sum_small.txt).
+
+Serial small (auto-teach-serial-small):
+  n       | time (seconds)
+  --------|---------------
+  500     | 0.029821
+  1000    | 0.06219
+  1500    | 0.094209
+  2000    | 0.128356
+  3000    | 0.187944
+  4000    | 0.252928
+  6000    | 0.387463
+  8000    | 0.523872
+
+Serial large (auto-teach-serial-large):
+  n       | time (seconds)
+  --------|---------------
+  10000   | 0.65973
+  20000   | 1.40276
+  40000   | 2.95954
+  80000   | 6.38506
+  160000  | 13.4078
+
+--------------------------------------------------------------------------------
+3. SERIAL: AUTOGRADER SLOPE (O(n) verification)
+--------------------------------------------------------------------------------
+Slope = 1 means O(n). Log-log plot of time vs n should be roughly linear with slope ~1.
+
+Serial small:
+  Slope estimates (between consecutive points): 1.06, 1.02, 1.08, 0.94, 1.03, 1.05, 1.05
+  Slope estimate for line fit: 1.027
+
+Serial large:
+  Slope estimates: 1.09, 1.08, 1.11, 1.07
+  Slope estimate for line fit: 1.088
+
+Report: Include a table of (n, time) and a log-log plot; state that the slope
+is close to 1, confirming O(n) complexity.
+
+--------------------------------------------------------------------------------
+4. OPENMP: STRONG AND WEAK SCALING (for plots and table)
+--------------------------------------------------------------------------------
+Summary file format: first line "n time" (serial baseline), then "n threads time" per run.
+
+OpenMP small (openmp_sum_small.txt):
+  n     | threads | time (s)
+  ------|---------|----------
+  2000  | (serial)| 0.12569
+  2000  | 1       | 0.123828
+  2000  | 2       | 0.092859
+  2000  | 4       | 0.115363
+  2000  | 8       | 0.074623
+  2000  | 16      | 0.06088
+  4000  | 2       | 0.171736
+  8000  | 4       | 0.46239
+  16000 | 8       | 0.615112
+  32000 | 16      | 0.891551
+
+OpenMP large (openmp_sum.txt):
+  n      | threads | time (s)
+  -------|---------|----------
+  10000  | (serial)| 0.659532
+  10000  | 1       | 0.640878
+  10000  | 2       | 0.442116
+  10000  | 4       | 0.606164
+  10000  | 8       | 0.373529
+  10000  | 16      | 0.264561
+  20000  | 2       | 0.918087
+  40000  | 4       | 2.3721
+  80000  | 8       | 3.21367
+  160000 | 16      | 4.64264
+
+--------------------------------------------------------------------------------
+5. OPENMP: AUTOGRADER EFFICIENCY AND SPEEDUP
+--------------------------------------------------------------------------------
+Autograder reports: strong scaling speedup and efficiency, weak scaling
+efficiency, then average strong (effss) and average weak (effws) scaling
+efficiency.
+
+OpenMP small:
+  Strong scaling speedup:  1.02, 1.35, 1.09, 1.68, 2.06  (for 1,2,4,8,16 threads)
+  Strong scaling efficiency: 1.02, 0.68, 0.27, 0.21, 0.13
+  Average strong scaling efficiency: 0.46
+
+  Weak scaling efficiency:  1.02, 0.73, 0.27, 0.20, 0.14
+  Average weak scaling efficiency: 0.47
+
+OpenMP large:
+  Strong scaling speedup:  1.03, 1.49, 1.09, 1.77, 2.49
+  Strong scaling efficiency: 1.03, 0.75, 0.27, 0.22, 0.16
+  Average strong scaling efficiency: 0.48
+
+  Weak scaling efficiency:  1.03, 0.72, 0.28, 0.21, 0.14
+  Average weak scaling efficiency: 0.47
+
+Report: Include (1) strong/weak scaling plots: running time vs threads (and vs n
+for weak); (2) strong scaling speedup plot; (3) strong/weak scaling efficiency
+plots; (4) table of average weak and strong scaling efficiency. Discuss how close
+speedup is to ideal p-times and where the time goes (synchronization, serial
+binning, critical section for dmin, cache effects). Note: re-run on Scinet for
+final numbers; local runs may differ.
+
+--------------------------------------------------------------------------------
+6. WHAT TO INCLUDE IN report-part1.pdf (checklist)
+--------------------------------------------------------------------------------
+  [ ] Serial: table of running time for different particle sizes + slope estimate.
+  [ ] Serial: log-log plot of running time vs n showing O(n).
+  [ ] OpenMP: strong scaling plot (time vs threads) and weak scaling plot.
+  [ ] OpenMP: strong scaling speedup plot.
+  [ ] OpenMP: strong and weak scaling efficiency plots.
+  [ ] OpenMP: table of average strong and weak scaling efficiency.
+  [ ] Description of implementation (cell list, 3x3 neighborhood, serial binning
+      in OpenMP, parallel force/move, schedule(static), single critical for dmin).
+  [ ] Discussion: where does the time go; synchronization/locking; how close to
+      ideal speedup; whether better scaling is possible.
