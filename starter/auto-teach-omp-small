@@ -1,0 +1,33 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=16
+#SBATCH --time=1:00:00
+#SBATCH --job-name omp
+#SBATCH --output=omp_%j.out
+
+
+module load StdEnv/2023
+module load intel/2023.2.1
+module load intelmpi/2021.9.0
+
+rm openmp_sum_small.txt
+./serial -n 2000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=1
+./openmp -n 2000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=2
+./openmp -n 2000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=4
+./openmp -n 2000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=8
+./openmp -n 2000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=16
+./openmp -n 2000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=2
+./openmp -n 4000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=4
+./openmp -n 8000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=8
+./openmp -n 16000 -no -s openmp_sum_small.txt
+export OMP_NUM_THREADS=16
+./openmp -n 32000 -no -s openmp_sum_small.txt
+./autograder -v openmp -s openmp_sum_small.txt 

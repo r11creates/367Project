@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=16
+#SBATCH --time=1:00:00
+#SBATCH --job-name omp
+#SBATCH --output=omp_%j.out
+
+module load StdEnv/2023
+module load intel/2023.2.1
+module load intelmpi/2021.9.0
+
+
+export OMP_NUM_THREADS=16
+./openmp  -n 5000 -o openmp.txt

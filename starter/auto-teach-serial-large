@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=8
+#SBATCH --exclusive
+#SBATCH --time=0:20:00
+#SBATCH --job-name part1
+#SBATCH --output=part1_%j.out
+
+     
+rm serial_sum.txt
+./serial -n 10000 -no -s serial_sum.txt
+./serial -n 20000 -no -s serial_sum.txt
+./serial -n 40000 -no -s serial_sum.txt
+./serial -n 80000 -no -s serial_sum.txt
+./serial -n 160000 -no -s serial_sum.txt
+./autograder -v serial -s serial_sum.txt 
+

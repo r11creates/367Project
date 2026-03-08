@@ -1,0 +1,9 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=8
+#SBATCH --exclusive
+#SBATCH --time=0:20:00
+#SBATCH --job-name part1
+#SBATCH --output=part1_%j.out
+
+./serial -n 1000 -o serial.txt

@@ -1,0 +1,26 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=16
+#SBATCH --cpus-per-task=1
+#SBATCH --time=1:00:00
+#SBATCH --job-name mpiSmall
+#SBATCH --output=mpi_%j.out
+
+module load StdEnv/2023
+module load intel/2023.2.1
+module load intelmpi/2021.9.0
+
+
+rm mpi_sum_small.txt
+srun -n 1 -o 0 ./serial -n 2000 -no -s mpi_sum_small.txt
+srun -n 1 -o 0 ./mpi -n 2000 -no -s mpi_sum_small.txt
+srun -n 2 -o 0 ./mpi -n 2000 -no -s mpi_sum_small.txt
+srun -n 4 -o 0 ./mpi -n 2000 -no -s mpi_sum_small.txt
+srun -n 8 -o 0 ./mpi -n 2000 -no -s mpi_sum_small.txt
+srun -n 16 -o 0 ./mpi -n 2000 -no -s mpi_sum_small.txt
+#srun -n 1 -o 0 ./mpi -n 2000 -no -s mpi_sum_small.txt
+srun -n 2 -o 0 ./mpi -n 4000 -no -s mpi_sum_small.txt
+srun -n 4 -o 0 ./mpi -n 8000 -no -s mpi_sum_small.txt
+srun -n 8 -o 0 ./mpi -n 16000 -no -s mpi_sum_small.txt
+srun -n 16 -o 0 ./mpi -n 32000 -no -s mpi_sum_small.txt
+srun -n 1 -o 0 ./autograder -v mpi -s mpi_sum_small.txt

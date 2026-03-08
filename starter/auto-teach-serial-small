@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=8
+#SBATCH --exclusive
+#SBATCH --time=0:20:00
+#SBATCH --job-name part1
+#SBATCH --output=part1_%j.out
+
+rm serial_sum_small.txt
+./serial -n 500 -no -s serial_sum_small.txt
+./serial -n 1000 -no -s serial_sum_small.txt
+./serial -n 1500 -no -s serial_sum_small.txt
+./serial -n 2000 -no -s serial_sum_small.txt
+./serial -n 3000 -no -s serial_sum_small.txt
+./serial -n 4000 -no -s serial_sum_small.txt
+./serial -n 6000 -no -s serial_sum_small.txt
+./serial -n 8000 -no -s serial_sum_small.txt
+./autograder -v serial -s serial_sum_small.txt
+
+     

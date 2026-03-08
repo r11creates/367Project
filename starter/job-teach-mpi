@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=16
+#SBATCH --cpus-per-task=1
+#SBATCH --time=1:00:00
+#SBATCH --job-name mpi
+#SBATCH --output=mpi_%j.out
+
+module load StdEnv/2023
+module load intel/2023.2.1
+module load intelmpi/2021.9.0
+
+srun -n 16 -o 0 ./mpi -n 5000 -o mpi.txt
+
