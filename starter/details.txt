@@ -1,138 +1,117 @@
 ================================================================================
-PART 1: SERIAL AND OPENMP - IMPLEMENTATION DETAILS, THOUGHT PROCESS, EXPLANATION
+PART 2: MPI - IMPLEMENTATION DETAILS, THOUGHT PROCESS, EXPLANATION
 ================================================================================
 
 HOW TO RUN
 ----------
 Always run from the starter folder:
   cd starter
-  make serial openmp    (on Scinet: use setup-project.sh then make)
-  sbatch job-teach-serial    # correctness check serial
-  sbatch job-teach-openmp     # correctness check openmp
-  sbatch auto-teach-serial-small   # then auto-teach-serial-large
-  sbatch auto-teach-omp-small     # then auto-teach-omp-large
+  source setup-project.sh    # loads modules and compiles (or: module load ...; make)
+  sbatch job-teach-mpi        # correctness check
+  sbatch auto-teach-mpi-small # timing/scaling small particles
+  sbatch auto-teach-mpi-large # timing/scaling large particles
 
 --------------------------------------------------------------------------------
 1. PROBLEM AND GOAL
 --------------------------------------------------------------------------------
-The starter code computes forces between all pairs of particles (O(n^2)). The
-assignment requires:
-  - A serial implementation that runs in O(n) time (linear in number of particles).
-  - An OpenMP implementation that parallelizes this O(n) solution for shared memory.
+The starter mpi.cpp uses MPI_Allgatherv to collect ALL particles on every
+processor each step, then computes forces against all n particles. This is
+O(n) communication and O(n * n/p) computation per step, which does not scale.
 
-The key fact from the handout: with the given low density, we expect only O(n)
-interactions total. So we must avoid checking every pair and instead only consider
-particles that can actually be within the cutoff distance.
+Our goal: O(n/p) computation per processor, O(n/p) communication (only with
+neighbors), achieving close to ideal p-times speedup.
 
 --------------------------------------------------------------------------------
-2. WHY SPATIAL BINNING (CELL LIST)
+2. APPROACH: 1D STRIP DECOMPOSITION + CELL LIST + GHOST EXCHANGE
 --------------------------------------------------------------------------------
-Forces only act when two particles are closer than CUTOFF (0.01 in common.cpp).
-So for each particle we only need to look at "neighbors" within a small distance.
-If we partition the simulation box into cells whose side length is at least
-CUTOFF, then any particle within CUTOFF of a given particle must lie in the same
-cell or in one of the 8 adjacent cells (3x3 block in 2D). So we:
-  1. Assign each particle to a cell based on its (x,y).
-  2. For each particle, only loop over particles in the same cell and the 8
-     neighboring cells.
+We combine the O(n) cell-list technique (same as serial/openmp) with a spatial
+domain decomposition for MPI:
 
-That way we do O(1) work per particle on average (constant expected neighbors
-per cell at low density), so total force computation is O(n). The cost of
-building the cell list each step is also O(n), so the whole step is O(n).
+  a) SPATIAL DECOMPOSITION
+     - The 2D simulation box is divided into horizontal strips along the y-axis.
+     - Each processor owns a contiguous range of cell rows.
+     - Processor rank owns rows [processorRowStart[rank], processorRowStart[rank+1]).
+     - Row distribution is balanced: processorRowStart[i] = i * numberCells / p.
 
---------------------------------------------------------------------------------
-3. SERIAL IMPLEMENTATION (serial.cpp)
---------------------------------------------------------------------------------
-Thought process:
-  - We cannot change common.cpp/common.h, so we duplicate the constants CUTOFF
-    and DENSITY in our file (same values as common.cpp) to compute the box size
-    and cell grid. Box size = sqrt(DENSITY * n), matching set_size() in common.
-  - Number of cells: we want cell width >= CUTOFF so that the 3x3 neighborhood
-    is sufficient. So numberCellsX = (int)(simulationSize / CUTOFF), and same
-    for Y. If that is 0 we use 1. Cell width is then simulationSize / numberCellsX,
-    which is >= CUTOFF.
-  - Data structures: cellFirst[totalCells] = index of first particle in that cell
-    (-1 if empty). nextInCell[n] = for each particle, the next particle index in
-    the same cell (-1 if none). So each cell is a linked list of particle indices.
-  - Each time step:
-      a) Clear: set all cellFirst[c] = -1.
-      b) Bin: for each particle, compute its cell (cellX, cellY) from (x,y),
-         clamp to valid range, then add the particle to that cell's list by
-         nextInCell[i] = cellFirst[cell], cellFirst[cell] = i.
-      c) Forces: for each particle i, get its cell (centerCellX, centerCellY).
-         Loop over the 3x3 block of cells (offsetX, offsetY in {-1,0,1}). For
-         each cell in the block, traverse the linked list (j = cellFirst[cellIndex],
-         then j = nextInCell[j] until -1) and call apply_force(particles[i],
-         particles[j], ...) for each neighbor j.
-      d) Move: unchanged, for each particle call move().
+  b) CELL LIST (same as serial)
+     - Each processor builds a cell list covering its own cell rows plus one
+       ghost row above and one ghost row below.
+     - Cell width >= CUTOFF, so the 3x3 cell neighborhood contains all
+       particles within the interaction distance.
+     - Data structures: cellFirst[] (head of linked list per cell),
+       nextInCell[] (next particle in same cell), combinedParticles[] (flat
+       array of local + ghost particles indexed by the cell list).
 
-Why this is correct:
-  - Any pair within distance CUTOFF lies in the same or adjacent cells, so we
-    never miss an interaction. We might check a few extra pairs (in adjacent cells
-    but just beyond CUTOFF); apply_force returns immediately when r2 > cutoff^2,
-    so that is harmless. So physics is unchanged and we get O(n) time.
+  c) GHOST EXCHANGE (only with immediate neighbors)
+     - Each step, a processor sends particles in its first owned cell row to
+       the neighbor above, and particles in its last owned cell row to the
+       neighbor below. These become ghost particles for the neighbor.
+     - Uses MPI_Sendrecv for count exchange (avoids deadlocks) then
+       non-blocking MPI_Isend/MPI_Irecv for the actual particle data.
+     - Only 2 neighbors communicate (or 1 at domain edges, or 0 for 1 proc).
+       Communication volume is O(particles in boundary rows), not O(n).
+
+  d) FORCE COMPUTATION
+     - Each processor computes forces only for its local particles, using
+       the cell list that includes ghost particles from neighbors.
+     - Expected O(n/p) work (constant neighbors per particle at low density).
+
+  e) MOVE AND MIGRATION
+     - Each processor moves its local particles using move() (handles wall
+       bouncing via the common.cpp implementation).
+     - After moving, particles that left the processor's y-range are migrated:
+       particles above myYStart go to neighborAbove, particles at or below
+       myYEnd go to neighborBelow.
+     - Migration uses MPI_Sendrecv for counts, then MPI_Isend/MPI_Irecv for
+       the actual particle transfers.
+     - Migration volume is small (few particles cross boundaries per step).
 
 --------------------------------------------------------------------------------
-4. OPENMP IMPLEMENTATION (openmp.cpp)
+3. WHY THIS DESIGN
 --------------------------------------------------------------------------------
-Thought process:
-  - Use the same cell list and constants as serial so that the algorithm remains
-    O(n) and correct.
-  - Parallelize only where it is safe and beneficial:
-      a) Binning: If we let multiple threads push into the same cell list, we
-         would need locks (e.g. omp_lock_t per cell) and contention could hurt.
-         So we do binning in a single thread (#pragma omp single). It is O(n)
-         and typically a small fraction of the step; the rest is force computation.
-      b) Force computation: Each particle i is written only to particles[i].ax
-         and particles[i].ay. So we can parallelize over particles with
-         #pragma omp for. Each thread needs its own dmin for the correctness
-         stats; we use private(dmin) and after the loop we use #pragma omp critical
-         to update the global absmin. For davg and navg we use reduction(+:davg,navg)
-         so OpenMP combines per-thread values automatically.
-      c) Move: Each thread updates different particles; #pragma omp for is safe.
-  - We use schedule(static) on the force and move loops so each thread gets a
-    contiguous chunk of particle indices. That improves cache locality (each
-    thread touches a contiguous region of the particles array) and can reduce
-    false sharing.
-  - Barrier: After the single region (binning) we need all threads to see the
-    updated cell lists before the force loop, so we use #pragma omp barrier.
-
-Synchronization and locking:
-  - Only one critical section per step: updating absmin from per-thread dmin. The
-    rest uses OpenMP reductions (davg, navg) and no locks. Binning is serial so
-    no locks there. This keeps synchronization overhead low.
+  - 1D strip decomposition is simple but effective for this problem. With
+    uniform particle density, each strip has roughly n/p particles. The
+    decomposition does not assume any specific network topology.
+  - Cell-row alignment means the cell list naturally covers the strip plus
+    ghost rows without fractional-cell complications.
+  - Ghost exchange is O(boundary particles) per step, not O(n). With the
+    given density and cell size, boundary rows hold O(sqrt(n)) particles
+    total, so communication is much less than O(n) for large n.
+  - Non-blocking MPI (Isend/Irecv) allows the MPI library to overlap
+    communication internally.
+  - Particle migration is simple because particles move by at most dt * v
+    per step (very small compared to strip height), so they only ever
+    cross to an immediate neighbor.
 
 --------------------------------------------------------------------------------
-5. DESIGN CHOICES SUMMARY
+4. SYNCHRONIZATION AND COMMUNICATION
 --------------------------------------------------------------------------------
-  - Cell width >= CUTOFF: ensures 3x3 neighbor search is sufficient for correctness.
-  - Linked-list cell representation: simple, no dynamic allocation per step, O(1)
-    insert per particle when binning.
-  - Serial binning in OpenMP: avoids per-cell locks and contention; binning is
-    O(n) and small compared to force work for large n.
-  - Static scheduling: contiguous chunks per thread for better cache behavior.
-  - Single critical for dmin: minimal locking; reductions handle davg and navg.
+Per timestep, each processor performs:
+  1. Cell list build (local, no communication)
+  2. Ghost exchange: 2 MPI_Sendrecv (counts) + up to 4 MPI_Isend/Irecv (data)
+  3. Force computation (local, no communication)
+  4. Move (local, no communication)
+  5. Migration: 2 MPI_Sendrecv (counts) + up to 4 MPI_Isend/Irecv (data)
+  6. (If correctness on) 3 MPI_Reduce + optional MPI_Gatherv for saving
+
+With -no flag (timing runs), steps 2 and 5 are the only communication.
+Total messages per step per processor: at most 4 sends + 4 receives.
 
 --------------------------------------------------------------------------------
-6. CORRECTNESS CHECK (from handout)
+5. CORRECTNESS CHECK
 --------------------------------------------------------------------------------
-A correct simulation gives:
-  - absmin (minimum distance between any two particles during the run) > 0.4,
-    typically in 0.7-0.8.
-  - absavg (average distance) ~0.95 when most particles interact correctly.
+Same criteria as serial/openmp:
+  - absmin > 0.4 (typical 0.7-0.8): particles interact correctly
+  - absavg ~ 0.95: most particles interact correctly
 
-An incorrect simulation (e.g. missing interactions) gives absmin in 0.01-0.05
-and absavg ~0.66. Our runs show absmin in the 0.73-0.79 range and absavg ~0.95,
-so the implementation is correct.
+Our runs show absmin ~ 0.76-0.79 and absavg ~ 0.957 for all processor counts,
+confirming correctness.
 
 --------------------------------------------------------------------------------
-7. PERFORMANCE NOTES
+6. PERFORMANCE NOTES
 --------------------------------------------------------------------------------
-  - Serial: Autograder fits log(time) vs log(n) and reports a slope. Slope near
-    1.0 means O(n). Our slopes are around 1.03-1.09 (slightly above 1, e.g. cache
-    effects or constant overhead).
-  - OpenMP: Strong scaling = same n, more threads; weak scaling = n grows with
-    threads so work per thread is roughly constant. Efficiency and speedup are
-    reported by the autograder. On Scinet with Intel compiler and more cores,
-    results may differ from local g++ runs; always use Scinet for final numbers
-    and the report.
+  - 160000 particles, 16 processors: ~0.60 seconds (hint says ~2.6s)
+  - Strong scaling at 16 procs: ~14.7x speedup (near ideal 16x)
+  - Weak scaling efficiency near 1.0 across all processor counts
+  - Super-linear speedup at some points due to cache effects: with more
+    processors each has fewer particles, fitting better in L1/L2 cache.

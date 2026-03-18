@@ -1,138 +1,91 @@
 ================================================================================
-PART 1: SIMULATION AND TEST RESULTS FOR THE REPORT (report-part1.pdf)
+PART 2: MPI SIMULATION AND TEST RESULTS FOR THE REPORT (report-part2.pdf)
 ================================================================================
-Run from: cd starter, then use sbatch or run commands as in auto-teach-* scripts.
-These results are from a local g++ build; use Scinet (Intel, sbatch) for final
-report numbers.
+Run from: cd starter, then use sbatch or mpirun commands as in auto-teach-mpi-*
+scripts. These results are from the Scinet teach cluster with Intel compiler.
 
 --------------------------------------------------------------------------------
-1. CORRECTNESS CHECK (job-teach-* style)
+1. CORRECTNESS CHECK (job-teach-mpi style)
 --------------------------------------------------------------------------------
-Serial:
-  ./serial -n 1000 -o serial.txt
-  n = 1000, simulation time = ... seconds, absmin = 0.76..., absavg = 0.95...
-  -> absmin in [0.7, 0.8], absavg ~0.95 => correct.
+  mpirun -np 16 ./mpi -n 5000
+  n = 5000, simulation time = 0.037158 seconds, absmin = 0.760428, absavg = 0.956925
 
-OpenMP:
-  OMP_NUM_THREADS=16 ./openmp -n 5000 -o openmp.txt
-  n = 5000, threads = 16, simulation time = ... seconds, absmin = 0.73..., absavg = 0.95...
-  -> absmin > 0.4, absavg ~0.95 => correct.
+  mpirun -np 1 ./mpi -n 1000
+  n = 1000, simulation time = 0.053688 seconds, absmin = 0.778375, absavg = 0.956926
 
---------------------------------------------------------------------------------
-2. SERIAL: RUNNING TIME VS PARTICLE COUNT (for table and log-log plot)
---------------------------------------------------------------------------------
-Summary file format: one line per run "n time" (e.g. serial_sum_small.txt).
+  mpirun -np 2 ./mpi -n 1000
+  n = 1000, simulation time = 0.032948 seconds, absmin = 0.789305, absavg = 0.957030
 
-Serial small (auto-teach-serial-small):
-  n       | time (seconds)
-  --------|---------------
-  500     | 0.029821
-  1000    | 0.06219
-  1500    | 0.094209
-  2000    | 0.128356
-  3000    | 0.187944
-  4000    | 0.252928
-  6000    | 0.387463
-  8000    | 0.523872
+  mpirun -np 4 ./mpi -n 1000
+  n = 1000, simulation time = 0.023810 seconds, absmin = 0.780059, absavg = 0.956840
 
-Serial large (auto-teach-serial-large):
-  n       | time (seconds)
-  --------|---------------
-  10000   | 0.65973
-  20000   | 1.40276
-  40000   | 2.95954
-  80000   | 6.38506
-  160000  | 13.4078
+  All pass: absmin > 0.4, absavg ~ 0.95 => correct.
 
 --------------------------------------------------------------------------------
-3. SERIAL: AUTOGRADER SLOPE (O(n) verification)
+2. MPI SMALL (auto-teach-mpi-small style, mpi_sum_small.txt)
 --------------------------------------------------------------------------------
-Slope = 1 means O(n). Log-log plot of time vs n should be roughly linear with slope ~1.
+  n     | procs | time (s)
+  ------|-------|----------
+  2000  | (ser) | 0.123026
+  2000  | 1     | 0.105457
+  2000  | 2     | 0.056771
+  2000  | 4     | 0.033313
+  2000  | 8     | 0.020832
+  2000  | 16    | 0.015006
+  4000  | 2     | 0.111221
+  8000  | 4     | 0.116311
+  16000 | 8     | 0.120312
+  32000 | 16    | 0.124414
 
-Serial small:
-  Slope estimates (between consecutive points): 1.06, 1.02, 1.08, 0.94, 1.03, 1.05, 1.05
-  Slope estimate for line fit: 1.027
+Autograder output (small):
+  Strong scaling speedup:    1.17, 2.17, 3.69, 5.91, 8.20  (for 1,2,4,8,16 procs)
+  Strong scaling efficiency: 1.17, 1.08, 0.92, 0.74, 0.51
+  Average strong scaling efficiency: 0.88
 
-Serial large:
-  Slope estimates: 1.09, 1.08, 1.11, 1.07
-  Slope estimate for line fit: 1.088
-
-Report: Include a table of (n, time) and a log-log plot; state that the slope
-is close to 1, confirming O(n) complexity.
-
---------------------------------------------------------------------------------
-4. OPENMP: STRONG AND WEAK SCALING (for plots and table)
---------------------------------------------------------------------------------
-Summary file format: first line "n time" (serial baseline), then "n threads time" per run.
-
-OpenMP small (openmp_sum_small.txt):
-  n     | threads | time (s)
-  ------|---------|----------
-  2000  | (serial)| 0.12569
-  2000  | 1       | 0.123828
-  2000  | 2       | 0.092859
-  2000  | 4       | 0.115363
-  2000  | 8       | 0.074623
-  2000  | 16      | 0.06088
-  4000  | 2       | 0.171736
-  8000  | 4       | 0.46239
-  16000 | 8       | 0.615112
-  32000 | 16      | 0.891551
-
-OpenMP large (openmp_sum.txt):
-  n      | threads | time (s)
-  -------|---------|----------
-  10000  | (serial)| 0.659532
-  10000  | 1       | 0.640878
-  10000  | 2       | 0.442116
-  10000  | 4       | 0.606164
-  10000  | 8       | 0.373529
-  10000  | 16      | 0.264561
-  20000  | 2       | 0.918087
-  40000  | 4       | 2.3721
-  80000  | 8       | 3.21367
-  160000 | 16      | 4.64264
+  Weak scaling efficiency:   1.17, 1.11, 1.06, 1.02, 0.99
+  Average weak scaling efficiency: 1.07
 
 --------------------------------------------------------------------------------
-5. OPENMP: AUTOGRADER EFFICIENCY AND SPEEDUP
+3. MPI LARGE (auto-teach-mpi-large style, mpi_sum.txt)
 --------------------------------------------------------------------------------
-Autograder reports: strong scaling speedup and efficiency, weak scaling
-efficiency, then average strong (effss) and average weak (effws) scaling
-efficiency.
+  n      | procs | time (s)
+  -------|-------|----------
+  10000  | (ser) | 0.648209
+  10000  | 1     | 0.558905
+  10000  | 2     | 0.279306
+  10000  | 4     | 0.143935
+  10000  | 8     | 0.076493
+  10000  | 16    | 0.044042
+  20000  | 2     | 0.579428
+  40000  | 4     | 0.591293
+  80000  | 8     | 0.593097
+  160000 | 16    | 0.602844
 
-OpenMP small:
-  Strong scaling speedup:  1.02, 1.35, 1.09, 1.68, 2.06  (for 1,2,4,8,16 threads)
-  Strong scaling efficiency: 1.02, 0.68, 0.27, 0.21, 0.13
-  Average strong scaling efficiency: 0.46
+Autograder output (large):
+  Strong scaling speedup:    1.16, 2.32, 4.50, 8.47, 14.72  (for 1,2,4,8,16 procs)
+  Strong scaling efficiency: 1.16, 1.16, 1.13, 1.06, 0.92
+  Average strong scaling efficiency: 1.09
 
-  Weak scaling efficiency:  1.02, 0.73, 0.27, 0.20, 0.14
-  Average weak scaling efficiency: 0.47
-
-OpenMP large:
-  Strong scaling speedup:  1.03, 1.49, 1.09, 1.77, 2.49
-  Strong scaling efficiency: 1.03, 0.75, 0.27, 0.22, 0.16
-  Average strong scaling efficiency: 0.48
-
-  Weak scaling efficiency:  1.03, 0.72, 0.28, 0.21, 0.14
-  Average weak scaling efficiency: 0.47
-
-Report: Include (1) strong/weak scaling plots: running time vs threads (and vs n
-for weak); (2) strong scaling speedup plot; (3) strong/weak scaling efficiency
-plots; (4) table of average weak and strong scaling efficiency. Discuss how close
-speedup is to ideal p-times and where the time goes (synchronization, serial
-binning, critical section for dmin, cache effects). Note: re-run on Scinet for
-final numbers; local runs may differ.
+  Weak scaling efficiency:   1.16, 1.12, 1.10, 1.09, 1.08
+  Average weak scaling efficiency: 1.11
 
 --------------------------------------------------------------------------------
-6. WHAT TO INCLUDE IN report-part1.pdf (checklist)
+4. KEY RESULT: 160000 PARTICLES
 --------------------------------------------------------------------------------
-  [ ] Serial: table of running time for different particle sizes + slope estimate.
-  [ ] Serial: log-log plot of running time vs n showing O(n).
-  [ ] OpenMP: strong scaling plot (time vs threads) and weak scaling plot.
-  [ ] OpenMP: strong scaling speedup plot.
-  [ ] OpenMP: strong and weak scaling efficiency plots.
-  [ ] OpenMP: table of average strong and weak scaling efficiency.
-  [ ] Description of implementation (cell list, 3x3 neighborhood, serial binning
-      in OpenMP, parallel force/move, schedule(static), single critical for dmin).
-  [ ] Discussion: where does the time go; synchronization/locking; how close to
-      ideal speedup; whether better scaling is possible.
+  160000 particles, 16 processors: 0.602844 seconds
+  Hint from instructions: ~2.6 seconds => we are ~4.3x faster than the hint.
+
+--------------------------------------------------------------------------------
+5. WHAT TO INCLUDE IN report-part2.pdf (checklist)
+--------------------------------------------------------------------------------
+  [ ] Strong scaling plot: running time vs number of processors (fixed n=10000)
+  [ ] Strong scaling speedup plot vs ideal linear speedup
+  [ ] Weak scaling plot: running time vs processors (n grows with p)
+  [ ] Strong and weak scaling efficiency plots
+  [ ] Table of average strong and weak scaling efficiency
+  [ ] Description of 1D strip decomposition, cell list, ghost exchange, migration
+  [ ] Description of communication: what is sent, to whom, how much
+  [ ] Discussion: how close to ideal p-times speedup; super-linear effects from
+      cache; where does the time go (computation vs communication); can we do
+      better (2D decomposition, overlapping communication with computation)
+  [ ] Build and run instructions (same Makefile, same sbatch scripts)
